@@ -8,6 +8,7 @@
 #include "FreeRTOS.h"
 #include "FreeRTOSConfig.h"
 #include "task.h"
+#include "hardware/pwm.h"
 #include <stdio.h>
 
 #define I2C_PORT i2c1
@@ -228,84 +229,91 @@ void vRgbLedTask(void *pvParameters) {
     }
 }
 
-// Tarefa para controlar os buzzers
+// Tarefa para controlar os buzzers com PWM
 void vBuzzerTask(void *pvParameters) {
-    gpio_init(BUZZER1);
-    gpio_init(BUZZER2);
-    gpio_set_dir(BUZZER1, GPIO_OUT);
-    gpio_set_dir(BUZZER2, GPIO_OUT);
+    // Configurar PWM para BUZZER1 e BUZZER2
+    gpio_set_function(BUZZER1, GPIO_FUNC_PWM);
+    gpio_set_function(BUZZER2, GPIO_FUNC_PWM);
+    uint slice_num1 = pwm_gpio_to_slice_num(BUZZER1);
+    uint slice_num2 = pwm_gpio_to_slice_num(BUZZER2);
+    pwm_set_wrap(slice_num1, 100); // Período de 100 unidades
+    pwm_set_wrap(slice_num2, 100); // Período de 100 unidades
+    pwm_set_clkdiv(slice_num1, 4.0f); // Ajustar frequência (ex.: ~5kHz com clock padrão)
+    pwm_set_clkdiv(slice_num2, 4.0f); // Ajustar frequência igual para os dois
+    pwm_set_enabled(slice_num1, true);
+    pwm_set_enabled(slice_num2, true);
 
     while (true) {
         if (current_mode == MODE_NORMAL) {
             // Modo Normal
             // Verde: 1 beep curto por segundo (pode atravessar)
             for (int i = 0; i < 20; i++) { // 20 segundos
-                gpio_put(BUZZER1, true);
-                gpio_put(BUZZER2, true);
+                pwm_set_chan_level(slice_num1, pwm_gpio_to_channel(BUZZER1), 100); // 75% duty cycle
+                pwm_set_chan_level(slice_num2, pwm_gpio_to_channel(BUZZER2), 100); // 75% duty cycle
                 vTaskDelay(pdMS_TO_TICKS(200)); // Beep curto
-                gpio_put(BUZZER1, false);
-                gpio_put(BUZZER2, false);
+                pwm_set_chan_level(slice_num1, pwm_gpio_to_channel(BUZZER1), 0); // Desliga
+                pwm_set_chan_level(slice_num2, pwm_gpio_to_channel(BUZZER2), 0); // Desliga
                 vTaskDelay(pdMS_TO_TICKS(800)); // Intervalo (1s total por ciclo)
                 if (current_mode != MODE_NORMAL) break;
             }
             // Amarelo: Beep rápido intermitente (atenção)
             for (int i = 0; i < 7; i++) { // 3 segundos (7 ciclos de ~428ms)
-                gpio_put(BUZZER1, true);
-                gpio_put(BUZZER2, true);
+                pwm_set_chan_level(slice_num1, pwm_gpio_to_channel(BUZZER1), 75); // 75% duty cycle
+                pwm_set_chan_level(slice_num2, pwm_gpio_to_channel(BUZZER2), 75); // 75% duty cycle
                 vTaskDelay(pdMS_TO_TICKS(200)); // Beep rápido
-                gpio_put(BUZZER1, false);
-                gpio_put(BUZZER2, false);
+                pwm_set_chan_level(slice_num1, pwm_gpio_to_channel(BUZZER1), 0); // Desliga
+                pwm_set_chan_level(slice_num2, pwm_gpio_to_channel(BUZZER2), 0); // Desliga
                 vTaskDelay(pdMS_TO_TICKS(228)); // Intervalo ajustado para 3s totais
                 if (current_mode != MODE_NORMAL) break;
             }
             // Vermelho: Tom contínuo curto (500ms ligado, 1.5s desligado) (pare)
             for (int i = 0; i < 10; i++) { // 20 segundos (10 ciclos de 2s)
-                gpio_put(BUZZER1, true);
-                gpio_put(BUZZER2, true);
+                pwm_set_chan_level(slice_num1, pwm_gpio_to_channel(BUZZER1), 75); // 75% duty cycle
+                pwm_set_chan_level(slice_num2, pwm_gpio_to_channel(BUZZER2), 75); // 75% duty cycle
                 vTaskDelay(pdMS_TO_TICKS(500)); // Tom contínuo
-                gpio_put(BUZZER1, false);
-                gpio_put(BUZZER2, false);
+                pwm_set_chan_level(slice_num1, pwm_gpio_to_channel(BUZZER1), 0); // Desliga
+                pwm_set_chan_level(slice_num2, pwm_gpio_to_channel(BUZZER2), 0); // Desliga
                 vTaskDelay(pdMS_TO_TICKS(1500)); // Intervalo
                 if (current_mode != MODE_NORMAL) break;
             }
         } else if (current_mode == MODE_NOTURNO) {
             // Modo Noturno: Beep lento a cada 2s (restaurado para 0.2s aceso, 1.8s apagado)
-            gpio_put(BUZZER1, true);
-            gpio_put(BUZZER2, true);
+            pwm_set_chan_level(slice_num1, pwm_gpio_to_channel(BUZZER1), 75); // 75% duty cycle
+            pwm_set_chan_level(slice_num2, pwm_gpio_to_channel(BUZZER2), 75); // 75% duty cycle
             vTaskDelay(pdMS_TO_TICKS(200)); // Beep curto
-            gpio_put(BUZZER1, false);
-            gpio_put(BUZZER2, false);
+            pwm_set_chan_level(slice_num1, pwm_gpio_to_channel(BUZZER1), 0); // Desliga
+            pwm_set_chan_level(slice_num2, pwm_gpio_to_channel(BUZZER2), 0); // Desliga
             vTaskDelay(pdMS_TO_TICKS(1800)); // Intervalo de 2s
             if (current_mode != MODE_NOTURNO) continue; // Garante que não saia do modo noturno
         } else if (current_mode == MODE_ALTO_FLUXO) {
             // Modo Alto Fluxo
             // Verde: 1 beep curto por segundo (pode atravessar)
             for (int i = 0; i < 25; i++) { // 25 segundos
-                gpio_put(BUZZER1, true);
-                gpio_put(BUZZER2, true);
+                pwm_set_chan_level(slice_num1, pwm_gpio_to_channel(BUZZER1), 75); // 75% duty cycle
+                pwm_set_chan_level(slice_num2, pwm_gpio_to_channel(BUZZER2), 75); // 75% duty cycle
                 vTaskDelay(pdMS_TO_TICKS(200)); // Beep curto
-                gpio_put(BUZZER1, false);
-                gpio_put(BUZZER2, false);
+                pwm_set_chan_level(slice_num1, pwm_gpio_to_channel(BUZZER1), 0); // Desliga
+                pwm_set_chan_level(slice_num2, pwm_gpio_to_channel(BUZZER2), 0); // Desliga
                 vTaskDelay(pdMS_TO_TICKS(800)); // Intervalo (1s total por ciclo)
                 if (current_mode != MODE_ALTO_FLUXO) break;
             }
             // Amarelo: Beep rápido intermitente (atenção)
             for (int i = 0; i < 7; i++) { // 3 segundos (7 ciclos de ~428ms)
-                gpio_put(BUZZER1, true);
-                gpio_put(BUZZER2, true);
+                pwm_set_chan_level(slice_num1, pwm_gpio_to_channel(BUZZER1), 75); // 75% duty cycle
+                pwm_set_chan_level(slice_num2, pwm_gpio_to_channel(BUZZER2), 75); // 75% duty cycle
                 vTaskDelay(pdMS_TO_TICKS(200)); // Beep rápido
-                gpio_put(BUZZER1, false);
-                gpio_put(BUZZER2, false);
+                pwm_set_chan_level(slice_num1, pwm_gpio_to_channel(BUZZER1), 0); // Desliga
+                pwm_set_chan_level(slice_num2, pwm_gpio_to_channel(BUZZER2), 0); // Desliga
                 vTaskDelay(pdMS_TO_TICKS(228)); // Intervalo ajustado para 3s totais
                 if (current_mode != MODE_ALTO_FLUXO) break;
             }
             // Vermelho: Tom contínuo curto (500ms ligado, 1.5s desligado) (pare)
             for (int i = 0; i < 7; i++) { // 15 segundos (7 ciclos de ~2.14s)
-                gpio_put(BUZZER1, true);
-                gpio_put(BUZZER2, true);
+                pwm_set_chan_level(slice_num1, pwm_gpio_to_channel(BUZZER1), 75); // 75% duty cycle
+                pwm_set_chan_level(slice_num2, pwm_gpio_to_channel(BUZZER2), 75); // 75% duty cycle
                 vTaskDelay(pdMS_TO_TICKS(500)); // Tom contínuo
-                gpio_put(BUZZER1, false);
-                gpio_put(BUZZER2, false);
+                pwm_set_chan_level(slice_num1, pwm_gpio_to_channel(BUZZER1), 0); // Desliga
+                pwm_set_chan_level(slice_num2, pwm_gpio_to_channel(BUZZER2), 0); // Desliga
                 vTaskDelay(pdMS_TO_TICKS(1643)); // Intervalo ajustado para 15s totais
                 if (current_mode != MODE_ALTO_FLUXO) break;
             }
@@ -313,31 +321,31 @@ void vBuzzerTask(void *pvParameters) {
             // Modo Baixo Fluxo
             // Vermelho: Tom contínuo curto (500ms ligado, 1.5s desligado) (pare)
             for (int i = 0; i < 12; i++) { // 25 segundos (12 ciclos de ~2.08s)
-                gpio_put(BUZZER1, true);
-                gpio_put(BUZZER2, true);
+                pwm_set_chan_level(slice_num1, pwm_gpio_to_channel(BUZZER1), 75); // 75% duty cycle
+                pwm_set_chan_level(slice_num2, pwm_gpio_to_channel(BUZZER2), 75); // 75% duty cycle
                 vTaskDelay(pdMS_TO_TICKS(500)); // Tom contínuo
-                gpio_put(BUZZER1, false);
-                gpio_put(BUZZER2, false);
+                pwm_set_chan_level(slice_num1, pwm_gpio_to_channel(BUZZER1), 0); // Desliga
+                pwm_set_chan_level(slice_num2, pwm_gpio_to_channel(BUZZER2), 0); // Desliga
                 vTaskDelay(pdMS_TO_TICKS(1583)); // Intervalo ajustado para 25s totais
                 if (current_mode != MODE_BAIXO_FLUXO) break;
             }
             // Amarelo: Beep rápido intermitente (atenção)
             for (int i = 0; i < 7; i++) { // 3 segundos (7 ciclos de ~428ms)
-                gpio_put(BUZZER1, true);
-                gpio_put(BUZZER2, true);
+                pwm_set_chan_level(slice_num1, pwm_gpio_to_channel(BUZZER1), 75); // 75% duty cycle
+                pwm_set_chan_level(slice_num2, pwm_gpio_to_channel(BUZZER2), 75); // 75% duty cycle
                 vTaskDelay(pdMS_TO_TICKS(200)); // Beep rápido
-                gpio_put(BUZZER1, false);
-                gpio_put(BUZZER2, false);
+                pwm_set_chan_level(slice_num1, pwm_gpio_to_channel(BUZZER1), 0); // Desliga
+                pwm_set_chan_level(slice_num2, pwm_gpio_to_channel(BUZZER2), 0); // Desliga
                 vTaskDelay(pdMS_TO_TICKS(228)); // Intervalo ajustado para 3s totais
                 if (current_mode != MODE_BAIXO_FLUXO) break;
             }
             // Verde: 1 beep curto por segundo (pode atravessar)
             for (int i = 0; i < 15; i++) { // 15 segundos
-                gpio_put(BUZZER1, true);
-                gpio_put(BUZZER2, true);
+                pwm_set_chan_level(slice_num1, pwm_gpio_to_channel(BUZZER1), 75); // 75% duty cycle
+                pwm_set_chan_level(slice_num2, pwm_gpio_to_channel(BUZZER2), 75); // 75% duty cycle
                 vTaskDelay(pdMS_TO_TICKS(200)); // Beep curto
-                gpio_put(BUZZER1, false);
-                gpio_put(BUZZER2, false);
+                pwm_set_chan_level(slice_num1, pwm_gpio_to_channel(BUZZER1), 0); // Desliga
+                pwm_set_chan_level(slice_num2, pwm_gpio_to_channel(BUZZER2), 0); // Desliga
                 vTaskDelay(pdMS_TO_TICKS(800)); // Intervalo (1s total por ciclo)
                 if (current_mode != MODE_BAIXO_FLUXO) break;
             }
@@ -390,15 +398,15 @@ void vDisplayTask(void *pvParameters) {
 
         // Modo atual logo abaixo do contador
         if (current_mode == MODE_NORMAL) {
-            sprintf(state_str, "Modo: Normal");
+            sprintf(state_str, "Modo Normal");
         } else if (current_mode == MODE_NOTURNO) {
-            sprintf(state_str, "Modo: Noturno");
+            sprintf(state_str, "Modo Noturno");
         } else if (current_mode == MODE_ALTO_FLUXO) {
-            sprintf(state_str, "Modo: Alto Fluxo");
+            sprintf(state_str, "Alto Fluxo");
         } else if (current_mode == MODE_BAIXO_FLUXO) {
-            sprintf(state_str, "Modo: Baixo Fluxo");
+            sprintf(state_str, "Baixo Fluxo");
         }
-        ssd1306_draw_string(&ssd, state_str, 0, 25); // Mantido em y=25
+        ssd1306_draw_string(&ssd, state_str, 25, 25); // Mantido em y=25
 
         // Barra de progresso (retângulo preenchido, sem borda, apenas nos modos Normal, Alto Fluxo e Baixo Fluxo)
         if (current_mode != MODE_NOTURNO) {
